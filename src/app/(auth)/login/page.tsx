@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { motion } from 'motion/react';
+import { AuthPageShell, authContainerVariants, authItemVariants } from '@/components/auth/AuthPageShell';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,51 +36,70 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-[400px]"
+    <AuthPageShell
+      title="Sign in"
+      subtitle="Enter your credentials to access JMB Card Ledger."
+    >
+      <motion.form
+        onSubmit={handleSubmit}
+        className="space-y-4"
+        variants={authContainerVariants}
+        initial="hidden"
+        animate="show"
       >
-        <h1 className="text-2xl font-bold mb-2">Sign in</h1>
-        <p className="text-muted-foreground text-sm mb-6">
-          Enter your credentials to access JMB Card Ledger.
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="mt-1"
-            />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
+        <motion.div variants={authItemVariants}>
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="mt-1.5 transition-all focus:ring-2 focus:ring-primary/20"
+          />
+        </motion.div>
+        <motion.div variants={authItemVariants}>
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="mt-1.5 transition-all focus:ring-2 focus:ring-primary/20"
+          />
+        </motion.div>
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-sm text-destructive"
+          >
+            {error}
+          </motion.p>
+        )}
+        <motion.div variants={authItemVariants}>
+          <Button
+            type="submit"
+            className="w-full font-medium"
+            disabled={loading}
+          >
             {loading ? 'Signing in…' : 'Sign in'}
           </Button>
-        </form>
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-primary hover:underline">
-            Sign up
-          </Link>
-        </p>
-      </motion.div>
-    </div>
+        </motion.div>
+      </motion.form>
+      <motion.p
+        variants={authItemVariants}
+        className="mt-6 text-center text-sm text-muted-foreground"
+      >
+        Don&apos;t have an account?{' '}
+        <Link
+          href="/signup"
+          className="font-medium text-primary hover:underline underline-offset-2"
+        >
+          Sign up
+        </Link>
+      </motion.p>
+    </AuthPageShell>
   );
 }
