@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { requireAuthUser } from "@/lib/supabase/auth";
 import { getProfile } from "@/lib/supabase/profiles";
 import { getStripe } from "@/lib/supabase/stripe";
+
+/** Stripe Subscription with period fields (present in API, sometimes omitted in SDK typings). */
+type SubscriptionWithPeriod = Stripe.Subscription & {
+  current_period_end?: number;
+};
 
 export async function GET() {
   try {
@@ -28,14 +34,15 @@ export async function GET() {
     }
 
     const stripe = getStripe();
-    const subscription = await stripe.subscriptions.retrieve(
+    const subscription = (await stripe.subscriptions.retrieve(
       profile.stripe_subscription_id,
       { expand: ["items.data.price"] }
-    );
+    )) as SubscriptionWithPeriod;
 
+    const periodEnd = subscription.current_period_end;
     const renewalDate =
-      subscription.current_period_end != null
-        ? new Date(subscription.current_period_end * 1000).toISOString().slice(0, 10)
+      periodEnd != null
+        ? new Date(periodEnd * 1000).toISOString().slice(0, 10)
         : null;
 
     return NextResponse.json({
