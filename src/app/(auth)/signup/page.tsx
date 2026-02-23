@@ -1,0 +1,107 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { motion } from "motion/react";
+import { AuthPageShell, authContainerVariants, authItemVariants } from "@/components/auth/AuthPageShell";
+
+export default function SignupPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const supabase = createSupabaseBrowserClient();
+    const { error: err } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+    });
+    setLoading(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    router.push("/dashboard");
+    router.refresh();
+  }
+
+  return (
+    <AuthPageShell
+      title="Create account"
+      subtitle="Sign up to start tracking your card inventory and sales."
+    >
+      <motion.form
+        onSubmit={handleSubmit}
+        className="space-y-4"
+        variants={authContainerVariants}
+        initial="hidden"
+        animate="show"
+      >
+        <motion.div variants={authItemVariants}>
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="mt-1.5 transition-all focus:ring-2 focus:ring-primary/20"
+          />
+        </motion.div>
+        <motion.div variants={authItemVariants}>
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            className="mt-1.5 transition-all focus:ring-2 focus:ring-primary/20"
+          />
+        </motion.div>
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-sm text-destructive"
+          >
+            {error}
+          </motion.p>
+        )}
+        <motion.div variants={authItemVariants}>
+          <Button
+            type="submit"
+            className="w-full font-medium"
+            disabled={loading}
+          >
+            {loading ? "Creating account…" : "Sign up"}
+          </Button>
+        </motion.div>
+      </motion.form>
+      <motion.p
+        variants={authItemVariants}
+        className="mt-6 text-center text-sm text-muted-foreground"
+      >
+        Already have an account?{" "}
+        <Link
+          href="/login"
+          className="font-medium text-primary hover:underline underline-offset-2"
+        >
+          Sign in
+        </Link>
+      </motion.p>
+    </AuthPageShell>
+  );
+}
