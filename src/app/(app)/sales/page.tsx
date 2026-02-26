@@ -4,10 +4,19 @@ import { useState } from "react";
 import { SalesTable } from "@/components/sales/SalesTable";
 import { RecordSaleDrawer } from "@/components/sales/RecordSaleDrawer";
 import { FIFOAuditModal } from "@/components/sales/FIFOAuditModal";
-import type { SaleFilters } from "@/types";
+import { useDeleteSale } from "@/lib/query/sales";
+import type { Sale, SaleFilters } from "@/types";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function SalesPage() {
   const [filters, setFilters] = useState<SaleFilters>({
@@ -17,10 +26,19 @@ export default function SalesPage() {
   const [fifoAuditSaleId, setFifoAuditSaleId] = useState<string | null>(null);
   const [fifoAuditOpen, setFifoAuditOpen] = useState(false);
   const [recordSaleOpen, setRecordSaleOpen] = useState(false);
+  const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
+  const deleteSale = useDeleteSale();
 
   function handleFIFOAudit(saleId: string) {
     setFifoAuditSaleId(saleId);
     setFifoAuditOpen(true);
+  }
+
+  function handleConfirmDeleteSale() {
+    if (!saleToDelete) return;
+    deleteSale.mutate(saleToDelete.id, {
+      onSuccess: () => setSaleToDelete(null),
+    });
   }
 
   return (
@@ -54,6 +72,7 @@ export default function SalesPage() {
         filters={filters}
         onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
         onFIFOAudit={handleFIFOAudit}
+        onDelete={(sale) => setSaleToDelete(sale)}
       />
 
       <FIFOAuditModal
@@ -61,6 +80,37 @@ export default function SalesPage() {
         open={fifoAuditOpen}
         onOpenChange={setFifoAuditOpen}
       />
+
+      <Dialog open={!!saleToDelete} onOpenChange={(open) => !open && setSaleToDelete(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete sale</DialogTitle>
+            <DialogDescription>
+              {saleToDelete ? (
+                <>
+                  Remove this sale?{" "}
+                  <span className="font-medium text-foreground">
+                    {saleToDelete.qty_sold}× {saleToDelete.card_name}
+                  </span>{" "}
+                  will be removed and inventory / profit will be recalculated. This cannot be undone.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaleToDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeleteSale}
+              disabled={deleteSale.isPending}
+            >
+              {deleteSale.isPending ? "Deleting…" : "Delete sale"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

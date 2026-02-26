@@ -5,6 +5,7 @@ import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AddLotDrawer } from "@/components/inventory/AddLotDrawer";
 import { EditLotDrawer } from "@/components/inventory/EditLotDrawer";
 import { LotDetailPanel } from "@/components/inventory/LotDetailPanel";
+import { useDeleteInventoryLot } from "@/lib/query/inventory";
 import type { InventoryLot } from "@/types";
 import type { InventoryFilters } from "@/types";
 import { motion } from "motion/react";
@@ -12,6 +13,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Filter, Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function InventoryPage() {
   const [filters, setFilters] = useState<InventoryFilters>({
@@ -20,12 +29,21 @@ export default function InventoryPage() {
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [editingLot, setEditingLot] = useState<InventoryLot | null>(null);
+  const [lotToDelete, setLotToDelete] = useState<InventoryLot | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const deleteLot = useDeleteInventoryLot();
 
   function handleEdit(lot: InventoryLot) {
     setEditingLot(lot);
     setEditOpen(true);
+  }
+
+  function handleConfirmDeleteLot() {
+    if (!lotToDelete) return;
+    deleteLot.mutate(lotToDelete.id, {
+      onSuccess: () => setLotToDelete(null),
+    });
   }
 
   function handleSearch() {
@@ -88,6 +106,7 @@ export default function InventoryPage() {
             filters={filters}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
             onEdit={handleEdit}
+            onDelete={(lot) => setLotToDelete(lot)}
           />
         </div>
         <div className="min-w-0">
@@ -101,6 +120,37 @@ export default function InventoryPage() {
         open={editOpen}
         onOpenChange={setEditOpen}
       />
+
+      <Dialog open={!!lotToDelete} onOpenChange={(open) => !open && setLotToDelete(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete purchase</DialogTitle>
+            <DialogDescription>
+              {lotToDelete ? (
+                <>
+                  Remove this inventory lot?{" "}
+                  <span className="font-medium text-foreground">
+                    {lotToDelete.card_name}
+                  </span>{" "}
+                  ({lotToDelete.qty_on_hand}/{lotToDelete.qty_initial}) will be removed. Lots that have already been used in sales cannot be deleted. This cannot be undone.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLotToDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeleteLot}
+              disabled={deleteLot.isPending}
+            >
+              {deleteLot.isPending ? "Deleting…" : "Delete purchase"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
