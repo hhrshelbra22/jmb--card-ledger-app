@@ -16,6 +16,9 @@ function handleError(error: unknown) {
     if (err.code === "LOT_HAS_SALES") {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
+    if (err.code === "QTY_BELOW_SOLD") {
+      return NextResponse.json({ error: err.message }, { status: 422 });
+    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
   return NextResponse.json({ error: "Internal server error" }, { status: 500 });

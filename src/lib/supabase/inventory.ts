@@ -6,6 +6,7 @@ import type {
   CardIdentity,
 } from "@/types";
 import type { CreateLotPayload, EditLotPayload } from "@/lib/validators/inventory";
+import { recalculateFIFOForCard } from "./fifo";
 
 function toLot(row: Record<string, unknown>): InventoryLot {
   return {
@@ -120,12 +121,20 @@ export async function updateInventoryLot(
   const existing = await getInventoryLotById(userId, id);
 
   const updates: Record<string, unknown> = { ...payload };
-  if (payload.qty_initial !== undefined && payload.total_cost !== undefined) {
-    const qty = payload.qty_initial;
-    updates.cost_per_card = qty > 0 ? payload.total_cost / qty : existing.cost_per_card;
-    updates.qty_on_hand = existing.qty_on_hand - existing.qty_initial + qty;
-  } else if (payload.qty_initial !== undefined) {
-    updates.qty_on_hand = existing.qty_on_hand - existing.qty_initial + payload.qty_initial;
+  if (payload.qty_initial !== undefined) {
+    const newQty = payload.qty_initial;
+    const alreadySoldFromLot = existing.qty_initial - existing.qty_on_hand;
+    if (newQty < alreadySoldFromLot) {
+      const err = new Error(
+        `Cannot set initial quantity to ${newQty}. At least ${alreadySoldFromLot} units from this lot have already been sold.`
+      );
+      (err as Error & { code?: string }).code = "QTY_BELOW_SOLD";
+      throw err;
+    }
+    if (payload.total_cost !== undefined) {
+      updates.cost_per_card = newQty > 0 ? payload.total_cost / newQty : existing.cost_per_card;
+    }
+    updates.qty_on_hand = existing.qty_on_hand - existing.qty_initial + newQty;
   }
   if (payload.total_cost !== undefined && payload.qty_initial === undefined) {
     const qty = existing.qty_initial;
@@ -141,7 +150,35 @@ export async function updateInventoryLot(
     .single();
 
   if (error) throw new Error(error.message);
-  return toLot(data as Record<string, unknown>);
+  const updated = toLot(data as Record<string, unknown>);
+
+  const updatedIdentity: CardIdentity = {
+    game: updated.game,
+    card_name: updated.card_name,
+    set_name: updated.set_name,
+    variant: updated.variant ?? "",
+    condition: updated.condition,
+  };
+  await recalculateFIFOForCard(userId, updatedIdentity);
+
+  const identityChanged =
+    existing.game !== updated.game ||
+    existing.card_name !== updated.card_name ||
+    existing.set_name !== updated.set_name ||
+    (existing.variant ?? "") !== (updated.variant ?? "") ||
+    existing.condition !== updated.condition;
+  if (identityChanged) {
+    const existingIdentity: CardIdentity = {
+      game: existing.game,
+      card_name: existing.card_name,
+      set_name: existing.set_name,
+      variant: existing.variant ?? "",
+      condition: existing.condition,
+    };
+    await recalculateFIFOForCard(userId, existingIdentity);
+  }
+
+  return updated;
 }
 
 export async function deleteInventoryLot(
