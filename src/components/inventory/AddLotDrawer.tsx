@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { MarketPriceDisplay, type MarketPriceData } from "@/components/inventory/MarketPriceDisplay";
 
 const GAMES = ["pokemon", "yugioh", "riftbound"] as const;
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"] as const;
@@ -35,6 +36,7 @@ interface AddLotDrawerProps {
 
 export function AddLotDrawer({ open: controlledOpen, onOpenChange }: AddLotDrawerProps = {}) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [lastMarketData, setLastMarketData] = useState<MarketPriceData | null>(null);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   const addLot = useAddInventoryLot();
@@ -54,9 +56,26 @@ export function AddLotDrawer({ open: controlledOpen, onOpenChange }: AddLotDrawe
     },
   });
 
+  const handleUsePrice = useCallback(
+    (valuePerUnit: number) => {
+      form.setValue("total_cost", valuePerUnit * form.getValues("qty_initial"));
+    },
+    [form]
+  );
+
   async function onSubmit(values: CreateLotPayload) {
-    await addLot.mutateAsync(values);
+    const payload = {
+      ...values,
+      market_estimate: lastMarketData
+        ? {
+            estimated_value_each: lastMarketData.estimated_value_each,
+            source_url: lastMarketData.source_url,
+          }
+        : undefined,
+    };
+    await addLot.mutateAsync(payload);
     form.reset();
+    setLastMarketData(null);
     setOpen(false);
   }
 
@@ -169,6 +188,15 @@ export function AddLotDrawer({ open: controlledOpen, onOpenChange }: AddLotDrawe
                     <FormMessage className="text-xs" />
                   </FormItem>
                 )}
+              />
+
+              <MarketPriceDisplay
+                cardName={form.watch("card_name")}
+                game={form.watch("game")}
+                setName={form.watch("set_name")}
+                condition={form.watch("condition")}
+                onUsePrice={handleUsePrice}
+                onMarketData={setLastMarketData}
               />
 
               {/* Qty + Purchase date side by side on sm+ */}

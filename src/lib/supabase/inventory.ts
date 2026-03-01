@@ -5,7 +5,11 @@ import type {
   PaginatedResponse,
   CardIdentity,
 } from "@/types";
-import type { CreateLotPayload, EditLotPayload } from "@/lib/validators/inventory";
+import type {
+  CreateLotPayload,
+  EditLotPayload,
+  MarketEstimatePayload,
+} from "@/lib/validators/inventory";
 import { recalculateFIFOForCard } from "./fifo";
 
 function toLot(row: Record<string, unknown>): InventoryLot {
@@ -110,6 +114,20 @@ export async function createInventoryLot(
 
   if (error) throw new Error(error.message);
   return toLot(data as Record<string, unknown>);
+}
+
+export async function insertPriceEstimate(
+  inventoryLotId: string,
+  estimate: MarketEstimatePayload
+): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  const source = estimate.source_url ?? "PriceCharting";
+  const { error } = await supabase.from("price_estimates").insert({
+    inventory_lot_id: inventoryLotId,
+    estimated_value_each: estimate.estimated_value_each,
+    source,
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function updateInventoryLot(
