@@ -158,11 +158,12 @@ export function MarketPriceDisplay({
     );
   }
 
-  const value = data.estimated_value_each;
+  // Always use estimated_value_each from the API response for display and actions
+  const estimated_value_each = data.estimated_value_each;
   const formatted =
-    typeof value === 'number' && Number.isFinite(value)
-      ? `$${value.toFixed(2)}`
-      : '—';
+    typeof estimated_value_each === "number" && Number.isFinite(estimated_value_each)
+      ? `$${estimated_value_each.toFixed(2)}`
+      : "—";
 
   return (
     <div className="space-y-1.5">
@@ -178,7 +179,7 @@ export function MarketPriceDisplay({
               variant="secondary"
               size="sm"
               className="h-8 text-xs"
-              onClick={() => onUsePrice(data.estimated_value_each)}
+              onClick={() => onUsePrice(estimated_value_each)}
             >
               Use this price
             </Button>
