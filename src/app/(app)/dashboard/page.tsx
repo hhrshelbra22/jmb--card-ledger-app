@@ -74,6 +74,7 @@ export default function DashboardPage() {
             title="Cards on Hand"
             value={stats?.cards_on_hand ?? 0}
             icon={Package}
+            format="number"
             isLoading={statsLoading}
             className="border-border rounded-xl glow-accent"
           />
@@ -88,6 +89,7 @@ export default function DashboardPage() {
             title="Active Lots"
             value={stats?.active_lots ?? 0}
             icon={Receipt}
+            format="number"
             isLoading={statsLoading}
             className="border-border rounded-xl"
           />

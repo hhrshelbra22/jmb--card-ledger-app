@@ -110,7 +110,7 @@ export default function InventoryPage() {
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6">
-        <div className="lg:col-span-2 min-w-0">
+        <div className="lg:col-span-3 min-w-0">
           <InventoryTable
             filters={filters}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
@@ -118,9 +118,9 @@ export default function InventoryPage() {
             onDelete={(lot) => setLotToDelete(lot)}
           />
         </div>
-        <div className="min-w-0">
+        {/* <div className="min-w-0">
           <LotDetailPanel lot={editingLot} />
-        </div>
+        </div> */}
       </div>
 
       <AddLotDrawer open={addOpen} onOpenChange={setAddOpen} />
