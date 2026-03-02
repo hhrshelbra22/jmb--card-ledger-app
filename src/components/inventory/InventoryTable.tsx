@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { formatCurrency, getGameColor, getGameDisplayName } from "@/lib/utils";
-import { useInventoryLots } from "@/lib/query/inventory";
-import type { InventoryLot, InventoryFilters } from "@/types";
-import { Edit, Trash2 } from "lucide-react";
-import { motion } from "motion/react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { formatCurrency, getGameColor, getGameDisplayName } from '@/lib/utils';
+import { useInventoryLots } from '@/lib/query/inventory';
+import type { InventoryLot, InventoryFilters } from '@/types';
+import { Edit, Trash2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface InventoryTableProps {
   filters: InventoryFilters;
@@ -66,7 +66,8 @@ export function InventoryTable({
         <Card className="border-border rounded-xl p-8 sm:p-12 text-center">
           <p className="text-muted-foreground mb-2">No inventory yet</p>
           <p className="text-sm text-muted-foreground">
-            Start by adding your first inventory lot to track your card investments.
+            Start by adding your first inventory lot to track your card
+            investments.
           </p>
         </Card>
       </motion.div>
@@ -98,12 +99,16 @@ export function InventoryTable({
                     style={{ backgroundColor: getGameColor(lot.game) }}
                   />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{lot.card_name}</p>
+                    <p className="text-sm font-medium truncate">
+                      {lot.card_name}
+                    </p>
                     <p className="text-xs text-muted-foreground truncate">
                       {getGameDisplayName(lot.game)}
                     </p>
                     {lot.set_name && (
-                      <p className="text-xs text-muted-foreground truncate">{lot.set_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {lot.set_name}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -140,17 +145,29 @@ export function InventoryTable({
                   {lot.condition}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  Qty: <span className="text-foreground">{lot.qty_on_hand}</span>
-                  <span className="text-muted-foreground">/{lot.qty_initial}</span>
+                  Qty:{' '}
+                  <span className="text-foreground">{lot.qty_on_hand}</span>
+                  <span className="text-muted-foreground">
+                    /{lot.qty_initial}
+                  </span>
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Cost: <span className="text-foreground font-mono">{formatCurrency(lot.cost_per_card)}</span>/ea
+                  Cost:{' '}
+                  <span className="text-foreground font-mono">
+                    {formatCurrency(lot.cost_per_card)}
+                  </span>
+                  /ea
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Total: <span className="text-foreground font-mono">{formatCurrency(lot.total_cost)}</span>
+                  Total:{' '}
+                  <span className="text-foreground font-mono">
+                    {formatCurrency(lot.total_cost)}
+                  </span>
                 </span>
                 {lot.variant && (
-                  <span className="text-xs text-muted-foreground">{lot.variant}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {lot.variant}
+                  </span>
                 )}
               </div>
             </motion.div>
@@ -167,8 +184,12 @@ export function InventoryTable({
                 <th className="text-left p-4 text-sm font-medium">Condition</th>
                 <th className="text-left p-4 text-sm font-medium">Qty</th>
                 <th className="text-left p-4 text-sm font-medium">Unit Cost</th>
-                <th className="text-left p-4 text-sm font-medium">Total Cost</th>
-                <th className="text-left p-4 text-sm font-medium">Market Est.</th>
+                <th className="text-left p-4 text-sm font-medium">
+                  Total Cost
+                </th>
+                <th className="text-left p-4 text-sm font-medium">
+                  Market Est.
+                </th>
                 <th className="text-right p-4 text-sm font-medium">Actions</th>
               </tr>
             </thead>
@@ -180,7 +201,7 @@ export function InventoryTable({
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3, delay: 0.05 * index }}
-                  whileHover={{ backgroundColor: "var(--muted)" }}
+                  whileHover={{ backgroundColor: 'var(--muted)' }}
                 >
                   <td className="p-4">
                     <div className="flex items-center gap-3">
@@ -199,7 +220,9 @@ export function InventoryTable({
                   <td className="p-4">
                     <p className="text-sm">{lot.set_name}</p>
                     {lot.variant ? (
-                      <p className="text-xs text-muted-foreground">{lot.variant}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {lot.variant}
+                      </p>
                     ) : null}
                   </td>
                   <td className="p-4">
@@ -210,7 +233,9 @@ export function InventoryTable({
                   <td className="p-4">
                     <div>
                       <p className="text-sm">{lot.qty_on_hand}</p>
-                      <p className="text-xs text-muted-foreground">of {lot.qty_initial}</p>
+                      <p className="text-xs text-muted-foreground">
+                        of {lot.qty_initial}
+                      </p>
                     </div>
                   </td>
                   <td className="p-4 text-sm font-mono">

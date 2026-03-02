@@ -77,6 +77,7 @@ export function useEditInventoryLot() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.inventory.all });
+      qc.invalidateQueries({ queryKey: queryKeys.sales.all });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success("Lot updated");
     },

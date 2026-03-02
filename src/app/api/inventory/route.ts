@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/supabase/auth";
-import { getInventoryLots, createInventoryLot } from "@/lib/supabase/inventory";
+import {
+  getInventoryLots,
+  createInventoryLot,
+  insertPriceEstimate,
+} from "@/lib/supabase/inventory";
 import { CreateLotSchema, InventoryFiltersSchema } from "@/lib/validators/inventory";
 import type { InventoryFilters } from "@/types";
 
@@ -47,6 +51,9 @@ export async function POST(req: NextRequest) {
       );
     }
     const lot = await createInventoryLot(user.id, parsed.data);
+    if (parsed.data.market_estimate) {
+      await insertPriceEstimate(lot.id, parsed.data.market_estimate);
+    }
     return NextResponse.json(lot, { status: 201 });
   } catch (e) {
     return handleError(e);

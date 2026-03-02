@@ -1,31 +1,49 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { InventoryTable } from "@/components/inventory/InventoryTable";
-import { AddLotDrawer } from "@/components/inventory/AddLotDrawer";
-import { EditLotDrawer } from "@/components/inventory/EditLotDrawer";
-import { LotDetailPanel } from "@/components/inventory/LotDetailPanel";
-import type { InventoryLot } from "@/types";
-import type { InventoryFilters } from "@/types";
-import { motion } from "motion/react";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Search, Filter, Plus } from "lucide-react";
+import { useState } from 'react';
+import { InventoryTable } from '@/components/inventory/InventoryTable';
+import { AddLotDrawer } from '@/components/inventory/AddLotDrawer';
+import { EditLotDrawer } from '@/components/inventory/EditLotDrawer';
+import { LotDetailPanel } from '@/components/inventory/LotDetailPanel';
+import { useDeleteInventoryLot } from '@/lib/query/inventory';
+import type { InventoryLot } from '@/types';
+import type { InventoryFilters } from '@/types';
+import { motion } from 'motion/react';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Search, Filter, Plus } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function InventoryPage() {
   const [filters, setFilters] = useState<InventoryFilters>({
     page: 1,
-    pageSize: 25,
+    pageSize: 10,
   });
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingLot, setEditingLot] = useState<InventoryLot | null>(null);
+  const [lotToDelete, setLotToDelete] = useState<InventoryLot | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const deleteLot = useDeleteInventoryLot();
 
   function handleEdit(lot: InventoryLot) {
     setEditingLot(lot);
     setEditOpen(true);
+  }
+
+  function handleConfirmDeleteLot() {
+    if (!lotToDelete) return;
+    deleteLot.mutate(lotToDelete.id, {
+      onSuccess: () => setLotToDelete(null),
+    });
   }
 
   function handleSearch() {
@@ -46,7 +64,11 @@ export default function InventoryPage() {
             Manage your card lots and purchases
           </p>
         </div>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="shrink-0">
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="shrink-0"
+        >
           <Button
             className="bg-primary text-primary-foreground hover:bg-primary/90 h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4"
             onClick={() => setAddOpen(true)}
@@ -71,11 +93,16 @@ export default function InventoryPage() {
                 placeholder="Search cards..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 className="pl-8 sm:pl-10 bg-input-background text-sm h-8 sm:h-9"
               />
             </div>
-            <Button variant="outline" size="icon" onClick={handleSearch} className="h-8 w-8 sm:h-9 sm:w-9 shrink-0">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleSearch}
+              className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
+            >
               <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </Button>
           </div>
@@ -83,16 +110,17 @@ export default function InventoryPage() {
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6">
-        <div className="lg:col-span-2 min-w-0">
+        <div className="lg:col-span-3 min-w-0">
           <InventoryTable
             filters={filters}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
             onEdit={handleEdit}
+            onDelete={(lot) => setLotToDelete(lot)}
           />
         </div>
-        <div className="min-w-0">
+        {/* <div className="min-w-0">
           <LotDetailPanel lot={editingLot} />
-        </div>
+        </div> */}
       </div>
 
       <AddLotDrawer open={addOpen} onOpenChange={setAddOpen} />
@@ -101,6 +129,42 @@ export default function InventoryPage() {
         open={editOpen}
         onOpenChange={setEditOpen}
       />
+
+      <Dialog
+        open={!!lotToDelete}
+        onOpenChange={(open) => !open && setLotToDelete(null)}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete purchase</DialogTitle>
+            <DialogDescription>
+              {lotToDelete ? (
+                <>
+                  Remove this inventory lot?{' '}
+                  <span className="font-medium text-foreground">
+                    {lotToDelete.card_name}
+                  </span>{' '}
+                  ({lotToDelete.qty_on_hand}/{lotToDelete.qty_initial}) will be
+                  removed. Lots that have already been used in sales cannot be
+                  deleted. This cannot be undone.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLotToDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeleteLot}
+              disabled={deleteLot.isPending}
+            >
+              {deleteLot.isPending ? 'Deleting…' : 'Delete purchase'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
