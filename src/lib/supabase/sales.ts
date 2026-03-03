@@ -96,6 +96,33 @@ export async function createSale(
   payload: RecordSalePayload
 ): Promise<Sale> {
   const supabase = await createSupabaseServerClient();
+
+  // ✅ INVENTORY CHECK — sum qty_on_hand across ALL matching lots (FIFO-aware)
+  const { data: lots, error: lotsError } = await supabase
+    .from("inventory_lots")
+    .select("qty_on_hand")
+    .eq("user_id", userId)
+    .eq("card_name", payload.card_name)
+    .eq("game", payload.game)
+    .eq("set_name", payload.set_name)
+    .eq("variant", payload.variant ?? "")
+    .eq("condition", payload.condition)
+    .gt("qty_on_hand", 0); // only lots that still have stock
+
+  if (lotsError) throw new Error(lotsError.message);
+
+  const totalAvailable = (lots ?? []).reduce(
+    (sum, lot) => sum + Number(lot.qty_on_hand),
+    0
+  );
+
+  if (payload.qty_sold > totalAvailable) {
+    throw new Error(
+      `Not enough inventory. You're trying to sell ${payload.qty_sold} but only ${totalAvailable} available across all lots.`
+    );
+  }
+  // ─── END INVENTORY CHECK ───
+
   const netProceeds = netProceedsFromPayload(payload);
 
   const { data: saleRow, error: insertError } = await supabase
