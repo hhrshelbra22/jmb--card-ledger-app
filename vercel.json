@@ -1,8 +1,2 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/refresh-estimates",
-      "schedule": "0 8,20 * * *"
-    }
-  ]
 }
