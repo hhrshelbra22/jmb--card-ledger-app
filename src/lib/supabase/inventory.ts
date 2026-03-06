@@ -28,9 +28,12 @@ function toLot(row: Record<string, unknown>): InventoryLot {
     total_cost: Number(row.total_cost),
     cost_per_card: Number(row.cost_per_card),
     created_at: row.created_at as string,
+    // --- new price tracking fields ---
+    price_query_key: (row.price_query_key as string) ?? null,
+    last_estimate_price: row.last_estimate_price != null ? Number(row.last_estimate_price) : null,
+    last_estimate_at: (row.last_estimate_at as string) ?? null,
   };
 }
-
 export async function getInventoryLots(
   userId: string,
   filters: InventoryFilters
@@ -93,6 +96,17 @@ export async function createInventoryLot(
   const totalCost = payload.total_cost;
   const costPerCard = qty > 0 ? totalCost / qty : 0;
 
+  // Generate normalized price query key at creation time
+  const priceQueryKey = [
+    payload.game,
+    payload.card_name,
+    payload.set_name,
+    payload.condition,
+    payload.variant ?? "",
+  ]
+    .map((s) => s.trim().toLowerCase())
+    .join("|");
+
   const { data, error } = await supabase
     .from("inventory_lots")
     .insert({
@@ -108,6 +122,7 @@ export async function createInventoryLot(
       vendor: payload.vendor ?? null,
       total_cost: totalCost,
       cost_per_card: costPerCard,
+      price_query_key: priceQueryKey,
     })
     .select()
     .single();
@@ -118,14 +133,19 @@ export async function createInventoryLot(
 
 export async function insertPriceEstimate(
   inventoryLotId: string,
-  estimate: MarketEstimatePayload
+  estimate: MarketEstimatePayload,
+  userId: string
 ): Promise<void> {
   const supabase = await createSupabaseServerClient();
-  const source = estimate.source_url ?? "PriceCharting";
   const { error } = await supabase.from("price_estimates").insert({
     inventory_lot_id: inventoryLotId,
-    estimated_value_each: estimate.estimated_value_each,
-    source,
+    user_id: userId,
+    estimated_price: estimate.estimated_value_each,
+    source: "pricecharting",
+    source_url: estimate.source_url ?? null,
+    currency: "USD",
+    status: "ok",
+    fetched_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);
 }

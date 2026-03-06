@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "./keys";
 import { toast } from "sonner";
-import type { InventoryLot, PaginatedResponse, InventoryFilters } from "@/types";
+import type { InventoryLot, PaginatedResponse, InventoryFilters, RefreshPriceResponse, PriceHistoryResponse } from "@/types";
 import type { CreateLotPayload, EditLotPayload } from "@/lib/validators/inventory";
 
 export function useInventoryLots(filters: InventoryFilters) {
@@ -109,5 +109,49 @@ export function useDeleteInventoryLot() {
       qc.invalidateQueries({ queryKey: queryKeys.inventory.all });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
+  });
+}
+
+
+export function useRefreshLotPrice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/inventory/${id}/refresh-price`, {
+        method: "POST",
+      });
+      if (res.status === 429) {
+        const err = await res.json();
+        throw new Error((err as { error?: string }).error ?? "Rate limited");
+      }
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error((err as { error?: string }).error ?? "Failed to refresh price");
+      }
+      return res.json() as Promise<RefreshPriceResponse>;
+    },
+    onSuccess: (_data, id) => {
+      // Invalidate the inventory list so new price shows immediately
+      qc.invalidateQueries({ queryKey: queryKeys.inventory.all });
+      // Invalidate price history for this specific lot
+      qc.invalidateQueries({ queryKey: queryKeys.inventory.priceHistory(id) });
+      toast.success("Price refreshed");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useLotPriceHistory(id: string | null, days: number = 30) {
+  return useQuery({
+    queryKey: queryKeys.inventory.priceHistory(id ?? "", days),
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/inventory/${id}/price-history?days=${days}`
+      );
+      if (!res.ok) throw new Error("Failed to fetch price history");
+      return res.json() as Promise<PriceHistoryResponse>;
+    },
+    enabled: !!id,
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }

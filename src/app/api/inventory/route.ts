@@ -7,6 +7,7 @@ import {
 } from "@/lib/supabase/inventory";
 import { CreateLotSchema, InventoryFiltersSchema } from "@/lib/validators/inventory";
 import type { InventoryFilters } from "@/types";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function handleError(error: unknown) {
   if (error instanceof Error) {
@@ -52,8 +53,21 @@ export async function POST(req: NextRequest) {
     }
     const lot = await createInventoryLot(user.id, parsed.data);
     if (parsed.data.market_estimate) {
-      await insertPriceEstimate(lot.id, parsed.data.market_estimate);
+      await insertPriceEstimate(lot.id, parsed.data.market_estimate, user.id);
     }
+
+    // Also update last_estimate_price on the lot if market estimate provided
+    if (parsed.data.market_estimate) {
+      const supabase = await createSupabaseServerClient();
+      await supabase
+        .from("inventory_lots")
+        .update({
+          last_estimate_price: parsed.data.market_estimate.estimated_value_each,
+          last_estimate_at: new Date().toISOString(),
+        })
+        .eq("id", lot.id);
+    }
+
     return NextResponse.json(lot, { status: 201 });
   } catch (e) {
     return handleError(e);

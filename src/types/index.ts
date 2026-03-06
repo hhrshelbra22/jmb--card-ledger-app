@@ -28,6 +28,10 @@ export interface InventoryLot {
   total_cost: number;
   cost_per_card: number;
   created_at: string;
+  // --- new price tracking fields ---
+  price_query_key: string | null;
+  last_estimate_price: number | null;
+  last_estimate_at: string | null;
 }
 
 export interface Sale {
@@ -100,4 +104,32 @@ export interface CardIdentity {
   set_name: string;
   variant: string;
   condition: ConditionType;
+}
+
+export interface PriceEstimate {
+  id: string;
+  inventory_lot_id: string;
+  user_id: string;
+  estimated_price: number | null;
+  source: string | null;
+  source_url: string | null;
+  fetched_at: string;
+  currency: string;
+  status: "ok" | "not_found" | "error";
+}
+
+export interface PriceHistoryResponse {
+  estimates: Pick<PriceEstimate, "id" | "estimated_price" | "fetched_at" | "status" | "source_url">[];
+  stats: {
+    high: number;
+    low: number;
+    avg: number;
+  } | null;
+}
+
+export interface RefreshPriceResponse {
+  estimated_price: number | null;
+  status: "ok" | "not_found" | "error";
+  source_url: string | null;
+  fetched_at: string;
 }

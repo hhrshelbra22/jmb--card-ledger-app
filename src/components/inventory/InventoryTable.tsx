@@ -1,20 +1,46 @@
 'use client';
 
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, getGameColor, getGameDisplayName } from '@/lib/utils';
-import { useInventoryLots } from '@/lib/query/inventory';
+import { useInventoryLots, useLotPriceHistory } from '@/lib/query/inventory';
 import type { InventoryLot, InventoryFilters } from '@/types';
 import { Edit, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PriceCell, DeltaIndicator } from '@/components/inventory/PriceCell';
+import { PriceHistoryDrawer } from '@/components/inventory/PriceHistoryDrawer';
+import { PriceSparkline } from "@/components/inventory/PriceSparkline";
 
 interface InventoryTableProps {
   filters: InventoryFilters;
   onPageChange?: (page: number) => void;
   onEdit?: (lot: InventoryLot) => void;
   onDelete?: (lot: InventoryLot) => void;
+}
+
+// Isolated per-row delta — each row fetches its own history independently
+function DeltaFromHistory({
+  lotId,
+  current,
+}: {
+  lotId: string;
+  current: number | null;
+}) {
+  const { data } = useLotPriceHistory(lotId, 30);
+
+  if (!current || !data?.estimates || data.estimates.length < 2) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  const sorted = [...data.estimates].sort(
+    (a, b) => new Date(b.fetched_at).getTime() - new Date(a.fetched_at).getTime()
+  );
+  const previous = sorted[1]?.estimated_price ?? null;
+
+  return <DeltaIndicator current={current} previous={previous} />;
 }
 
 export function InventoryTable({
@@ -29,7 +55,9 @@ export function InventoryTable({
   const pageSize = data?.pageSize ?? 25;
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const [selectedLot, setSelectedLot] = useState<InventoryLot | null>(null);
 
+  // ── Loading state ──
   if (isLoading) {
     return (
       <Card className="border-border rounded-xl overflow-hidden">
@@ -56,6 +84,7 @@ export function InventoryTable({
     );
   }
 
+  // ── Empty state ──
   if (lots.length === 0) {
     return (
       <motion.div
@@ -75,237 +104,282 @@ export function InventoryTable({
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.1 }}
-    >
-      <Card className="border-border rounded-xl overflow-hidden">
-        {/* ── Mobile: card list (< md) ── */}
-        <div className="md:hidden divide-y divide-border">
-          {lots.map((lot, index) => (
-            <motion.div
-              key={lot.id}
-              className="p-3 sm:p-4 hover:bg-muted/50 transition-colors"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.05 * index }}
-            >
-              <div className="flex items-start justify-between gap-2">
-                {/* Left: color bar + name */}
-                <div className="flex items-start gap-2 min-w-0">
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
+        <Card className="border-border rounded-xl overflow-hidden">
+
+          {/* ── Mobile: card list (< md) ── */}
+          <div className="md:hidden divide-y divide-border">
+            {lots.map((lot, index) => (
+              <motion.div
+                key={lot.id}
+                className="p-3 sm:p-4 hover:bg-muted/50 transition-colors"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: 0.05 * index }}
+              >
+                {/* Top row: name + actions */}
+                <div className="flex items-start justify-between gap-2">
                   <div
-                    className="w-1 h-10 rounded-full shrink-0 mt-0.5"
-                    style={{ backgroundColor: getGameColor(lot.game) }}
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {lot.card_name}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {getGameDisplayName(lot.game)}
-                    </p>
-                    {lot.set_name && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {lot.set_name}
+                    className="flex items-start gap-2 min-w-0 flex-1 cursor-pointer"
+                    onClick={() => setSelectedLot(lot)}
+                  >
+                    <div
+                      className="w-1 h-10 rounded-full shrink-0 mt-0.5"
+                      style={{ backgroundColor: getGameColor(lot.game) }}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {lot.card_name}
                       </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {getGameDisplayName(lot.game)}
+                      </p>
+                      {lot.set_name && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {lot.set_name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {onEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onEdit(lot)}
+                        aria-label="Edit"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                    {onDelete && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => onDelete(lot)}
+                        aria-label="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     )}
                   </div>
                 </div>
-                {/* Right: actions */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {onEdit && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => onEdit(lot)}
-                      aria-label="Edit"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
-                  )}
-                  {onDelete && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => onDelete(lot)}
-                      aria-label="Delete"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+
+                {/* Meta row */}
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-3">
+                  <Badge variant="outline" className="text-xs h-5">
+                    {lot.condition}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    Qty:{' '}
+                    <span className="text-foreground">{lot.qty_on_hand}</span>
+                    <span className="text-muted-foreground">
+                      /{lot.qty_initial}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Cost:{' '}
+                    <span className="text-foreground font-mono">
+                      {formatCurrency(lot.cost_per_card)}
+                    </span>
+                    /ea
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Total:{' '}
+                    <span className="text-foreground font-mono">
+                      {formatCurrency(lot.total_cost)}
+                    </span>
+                  </span>
+                  {lot.variant && (
+                    <span className="text-xs text-muted-foreground">
+                      {lot.variant}
+                    </span>
                   )}
                 </div>
-              </div>
 
-              {/* Meta row */}
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-3">
-                <Badge variant="outline" className="text-xs h-5">
-                  {lot.condition}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  Qty:{' '}
-                  <span className="text-foreground">{lot.qty_on_hand}</span>
-                  <span className="text-muted-foreground">
-                    /{lot.qty_initial}
-                  </span>
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Cost:{' '}
-                  <span className="text-foreground font-mono">
-                    {formatCurrency(lot.cost_per_card)}
-                  </span>
-                  /ea
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Total:{' '}
-                  <span className="text-foreground font-mono">
-                    {formatCurrency(lot.total_cost)}
-                  </span>
-                </span>
-                {lot.variant && (
-                  <span className="text-xs text-muted-foreground">
-                    {lot.variant}
-                  </span>
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </div>
+                {/* Price row — mobile */}
+                <div className="mt-2 pl-3 flex items-center gap-3">
+                  <PriceCell
+                    lot={lot}
+                    onOpenHistory={(l) => setSelectedLot(l)}
+                  />
+                  <DeltaFromHistory
+                    lotId={lot.id}
+                    current={lot.last_estimate_price ?? null}
+                  />
+                  <PriceSparkline lotId={lot.id} /> 
+                </div>
+              </motion.div>
+            ))}
+          </div>
 
-        {/* ── Desktop: full table (md+) ── */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50 border-b border-border">
-              <tr>
-                <th className="text-left p-4 text-sm font-medium">Card</th>
-                <th className="text-left p-4 text-sm font-medium">Set</th>
-                <th className="text-left p-4 text-sm font-medium">Condition</th>
-                <th className="text-left p-4 text-sm font-medium">Qty</th>
-                <th className="text-left p-4 text-sm font-medium">Unit Cost</th>
-                <th className="text-left p-4 text-sm font-medium">
-                  Total Cost
-                </th>
-                <th className="text-left p-4 text-sm font-medium">
-                  Market Est.
-                </th>
-                <th className="text-right p-4 text-sm font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lots.map((lot, index) => (
-                <motion.tr
-                  key={lot.id}
-                  className="border-b border-border hover:bg-muted/50 transition-colors"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.05 * index }}
-                  whileHover={{ backgroundColor: 'var(--muted)' }}
-                >
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-1 h-12 rounded-full shrink-0"
-                        style={{ backgroundColor: getGameColor(lot.game) }}
-                      />
-                      <div>
-                        <p className="text-sm font-medium">{lot.card_name}</p>
+          {/* ── Desktop: full table (md+) ── */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="text-left p-4 text-sm font-medium">Card</th>
+                  <th className="text-left p-4 text-sm font-medium">Set</th>
+                  <th className="text-left p-4 text-sm font-medium">Condition</th>
+                  <th className="text-left p-4 text-sm font-medium">Qty</th>
+                  <th className="text-left p-4 text-sm font-medium">Unit Cost</th>
+                  <th className="text-left p-4 text-sm font-medium">Total Cost</th>
+                  <th className="text-left p-4 text-sm font-medium">Market Price</th>
+                  <th className="text-left p-4 text-sm font-medium">Δ Change</th>
+                  <th className="text-left p-4 text-sm font-medium">Trend</th>
+                  <th className="text-right p-4 text-sm font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lots.map((lot, index) => (
+                  <motion.tr
+                    key={lot.id}
+                    className="border-b border-border hover:bg-muted/50 transition-colors cursor-pointer"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.05 * index }}
+                    onClick={() => setSelectedLot(lot)}
+                  >
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-1 h-12 rounded-full shrink-0"
+                          style={{ backgroundColor: getGameColor(lot.game) }}
+                        />
+                        <div>
+                          <p className="text-sm font-medium">{lot.card_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {getGameDisplayName(lot.game)}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <p className="text-sm">{lot.set_name}</p>
+                      {lot.variant ? (
                         <p className="text-xs text-muted-foreground">
-                          {getGameDisplayName(lot.game)}
+                          {lot.variant}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="p-4">
+                      <Badge variant="outline" className="text-xs">
+                        {lot.condition}
+                      </Badge>
+                    </td>
+                    <td className="p-4">
+                      <div>
+                        <p className="text-sm">{lot.qty_on_hand}</p>
+                        <p className="text-xs text-muted-foreground">
+                          of {lot.qty_initial}
                         </p>
                       </div>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <p className="text-sm">{lot.set_name}</p>
-                    {lot.variant ? (
-                      <p className="text-xs text-muted-foreground">
-                        {lot.variant}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="p-4">
-                    <Badge variant="outline" className="text-xs">
-                      {lot.condition}
-                    </Badge>
-                  </td>
-                  <td className="p-4">
-                    <div>
-                      <p className="text-sm">{lot.qty_on_hand}</p>
-                      <p className="text-xs text-muted-foreground">
-                        of {lot.qty_initial}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="p-4 text-sm font-mono">
-                    {formatCurrency(lot.cost_per_card)}
-                  </td>
-                  <td className="p-4 text-sm font-mono">
-                    {formatCurrency(lot.total_cost)}
-                  </td>
-                  <td className="p-4 text-sm text-muted-foreground">—</td>
-                  <td className="p-4">
-                    <div className="flex items-center justify-end gap-2">
-                      {onEdit && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => onEdit(lot)}
-                          aria-label="Edit"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      )}
-                      {onDelete && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          onClick={() => onDelete(lot)}
-                          aria-label="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ── Pagination (shared) ── */}
-        {totalPages > 1 && onPageChange && (
-          <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-t border-border">
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Page {page} of {totalPages}
-            </p>
-            <div className="flex gap-1.5 sm:gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3"
-                disabled={page <= 1}
-                onClick={() => onPageChange(page - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3"
-                disabled={page >= totalPages}
-                onClick={() => onPageChange(page + 1)}
-              >
-                Next
-              </Button>
-            </div>
+                    </td>
+                    <td className="p-4 text-sm font-mono">
+                      {formatCurrency(lot.cost_per_card)}
+                    </td>
+                    <td className="p-4 text-sm font-mono">
+                      {formatCurrency(lot.total_cost)}
+                    </td>
+                    <td
+                      className="p-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <PriceCell
+                        lot={lot}
+                        onOpenHistory={(l) => setSelectedLot(l)}
+                      />
+                    </td>
+                    <td className="p-4">
+                      <DeltaFromHistory
+                        lotId={lot.id}
+                        current={lot.last_estimate_price ?? null}
+                      />
+                    </td>
+                    <td className="p-4">                        
+                      <PriceSparkline lotId={lot.id} />
+                    </td>
+                    <td
+                      className="p-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-2">
+                        {onEdit && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => onEdit(lot)}
+                            aria-label="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {onDelete && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => onDelete(lot)}
+                            aria-label="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </Card>
-    </motion.div>
+
+          {/* ── Pagination ── */}
+          {totalPages > 1 && onPageChange && (
+            <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-t border-border">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </p>
+              <div className="flex gap-1.5 sm:gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3"
+                  disabled={page <= 1}
+                  onClick={() => onPageChange(page - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3"
+                  disabled={page >= totalPages}
+                  onClick={() => onPageChange(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      </motion.div>
+
+      {/* ── Price History Drawer ── */}
+      <PriceHistoryDrawer
+        lot={selectedLot}
+        open={!!selectedLot}
+        onOpenChange={(open) => {
+          if (!open) setSelectedLot(null);
+        }}
+      />
+    </>
   );
 }

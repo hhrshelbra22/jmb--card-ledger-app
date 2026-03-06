@@ -8,6 +8,7 @@ export const queryKeys = {
     all: ["inventory"] as const,
     list: (filters: InventoryFilters) => ["inventory", "list", filters] as const,
     detail: (id: string) => ["inventory", "detail", id] as const,
+    priceHistory: (id: string, days?: number) => ["inventory", "price-history", id, days] as const,
   },
 
   sales: {
