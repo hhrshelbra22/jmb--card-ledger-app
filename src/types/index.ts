@@ -11,7 +11,7 @@ export interface Profile {
   stripe_subscription_id: string | null;
   subscription_status: SubscriptionStatus | null;
   created_at: string;
-  current_period_end: string;
+  current_period_end: string | null;
 }
 
 export interface InventoryLot {

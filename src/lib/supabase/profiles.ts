@@ -10,6 +10,7 @@ function toProfile(row: Record<string, unknown>): Profile {
     stripe_customer_id: (row.stripe_customer_id as string) ?? null,
     stripe_subscription_id: (row.stripe_subscription_id as string) ?? null,
     subscription_status: (row.subscription_status as Profile["subscription_status"]) ?? null,
+    current_period_end: (row.current_period_end as string) ?? null,
     created_at: row.created_at as string,
   };
 }
