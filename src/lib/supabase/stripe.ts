@@ -69,17 +69,20 @@ export async function handleSubscriptionUpdated(
     return;
   }
 
-  const isActive = subscription.status === "active";
   const periodEnd = getPeriodEnd(subscription);
+  const sub = subscription as any;
+  const isCanceledAtPeriodEnd = sub.cancel_at_period_end === true;
 
   await supabase
     .from("profiles")
     .update({
-      role: isActive ? "pro" : "free",
-      subscription_status: subscription.status,
+      role: "pro",                          // keep pro until deleted event fires
+      subscription_status: isCanceledAtPeriodEnd ? "canceled" : subscription.status,
       current_period_end: periodEnd,
     })
     .eq("id", profiles[0].id);
+
+  console.log(`[stripe] Subscription updated | cancel_at_period_end: ${isCanceledAtPeriodEnd} | status: ${subscription.status}`);
 }
 
 export async function handleSubscriptionDeleted(
