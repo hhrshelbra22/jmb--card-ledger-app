@@ -23,6 +23,13 @@ function getPeriodEnd(subscription: unknown): string | null {
   return seconds ? new Date(seconds * 1000).toISOString() : null;
 }
 
+// Helper to extract cancel_at timestamp
+function getCancelAt(subscription: unknown): string | null {
+  const sub = subscription as Record<string, unknown>;
+  const cancelAt = sub.cancel_at as number | null | undefined;
+  return cancelAt ? new Date(cancelAt * 1000).toISOString() : null;
+}
+
 export async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session
 ) {
@@ -50,8 +57,11 @@ export async function handleCheckoutSessionCompleted(
       stripe_subscription_id: subscriptionId,
       subscription_status: "active",
       current_period_end: periodEnd,
+      cancel_at: null,           // fresh subscription, no cancel scheduled
     })
     .eq("id", userId);
+
+  console.log(`[stripe] ✅ Checkout completed | user: ${userId} | period_end: ${periodEnd}`);
 }
 
 export async function handleSubscriptionUpdated(
@@ -69,28 +79,24 @@ export async function handleSubscriptionUpdated(
     return;
   }
 
-  const sub = subscription as any;
   const periodEnd = getPeriodEnd(subscription);
+  const cancelAt = getCancelAt(subscription);
 
-  // Stripe can signal cancellation in two ways:
-  // 1. cancel_at_period_end = true (older behavior)
-  // 2. cancel_at is set to a timestamp (newer billing portal behavior)
-  const isCanceling =
-    sub.cancel_at_period_end === true ||
-    (sub.cancel_at !== null && sub.cancel_at !== undefined);
-
+  // Store cancel_at so UI can show "Cancels on [date]"
+  // Keep role = pro and status = active — Stripe still considers it active
+  // Only downgrade when customer.subscription.deleted fires
   await supabase
     .from("profiles")
     .update({
-      role: "pro",                                          // keep pro until deleted fires
-      subscription_status: isCanceling ? "canceled" : subscription.status,
+      role: "pro",
+      subscription_status: subscription.status,  // keep as "active" — Stripe says so
       current_period_end: periodEnd,
+      cancel_at: cancelAt,                        // ← "Cancels on April 9" for UI
     })
     .eq("id", profiles[0].id);
 
-  console.log(`[stripe] Updated | status: ${subscription.status} | cancel_at: ${sub.cancel_at} | cancel_at_period_end: ${sub.cancel_at_period_end} | isCanceling: ${isCanceling}`);
+  console.log(`[stripe] ✅ Subscription updated | status: ${subscription.status} | cancel_at: ${cancelAt} | period_end: ${periodEnd}`);
 }
-
 
 export async function handleSubscriptionDeleted(
   subscription: Stripe.Subscription
@@ -110,8 +116,11 @@ export async function handleSubscriptionDeleted(
         stripe_subscription_id: null,
         subscription_status: "canceled",
         current_period_end: null,
+        cancel_at: null,
       })
       .eq("id", profiles[0].id);
+
+    console.log(`[stripe] ✅ Subscription deleted | user downgraded to free`);
   }
 }
 
@@ -129,8 +138,11 @@ export async function handleInvoicePaymentFailed(
     .update({
       role: "free",
       subscription_status: "past_due",
+      cancel_at: null,
     })
     .eq("stripe_subscription_id", subscriptionId);
+
+  console.log(`[stripe] ⚠️ Payment failed | subscription: ${subscriptionId}`);
 }
 
 export async function handleInvoicePaymentSucceeded(
@@ -143,6 +155,7 @@ export async function handleInvoicePaymentSucceeded(
 
   const stripeSubscription = await getStripe().subscriptions.retrieve(subscriptionId);
   const periodEnd = getPeriodEnd(stripeSubscription);
+  const cancelAt = getCancelAt(stripeSubscription);
 
   const supabase = createSupabaseServiceClient();
   await supabase
@@ -151,8 +164,11 @@ export async function handleInvoicePaymentSucceeded(
       role: "pro",
       subscription_status: "active",
       current_period_end: periodEnd,
+      cancel_at: cancelAt,
     })
     .eq("stripe_subscription_id", subscriptionId);
+
+  console.log(`[stripe] ✅ Payment succeeded | period_end: ${periodEnd}`);
 }
 
 export async function verifyWebhook(
