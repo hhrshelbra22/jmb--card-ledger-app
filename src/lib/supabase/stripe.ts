@@ -12,6 +12,17 @@ export function getStripe(): Stripe {
   return stripeInstance;
 }
 
+// Helper to safely extract current_period_end across Stripe API versions
+function getPeriodEnd(subscription: unknown): string | null {
+  const sub = subscription as Record<string, unknown>;
+  const items = sub.items as { data?: { current_period_end?: number }[] } | undefined;
+  const seconds =
+    (sub.current_period_end as number | undefined) ??
+    (items?.data?.[0]?.current_period_end) ??
+    null;
+  return seconds ? new Date(seconds * 1000).toISOString() : null;
+}
+
 export async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session
 ) {
@@ -19,7 +30,16 @@ export async function handleCheckoutSessionCompleted(
   const customerId = session.customer as string | null;
   const userId = session.metadata?.user_id as string | undefined;
 
-  if (!userId) return;
+  if (!userId) {
+    console.error("[stripe] No user_id in checkout session metadata");
+    return;
+  }
+
+  let periodEnd: string | null = null;
+  if (subscriptionId) {
+    const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+    periodEnd = getPeriodEnd(subscription);
+  }
 
   const supabase = createSupabaseServiceClient();
   await supabase
@@ -29,14 +49,44 @@ export async function handleCheckoutSessionCompleted(
       stripe_customer_id: customerId,
       stripe_subscription_id: subscriptionId,
       subscription_status: "active",
+      current_period_end: periodEnd,
     })
     .eq("id", userId);
+}
+
+export async function handleSubscriptionUpdated(
+  subscription: Stripe.Subscription
+) {
+  const supabase = createSupabaseServiceClient();
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("stripe_subscription_id", subscription.id);
+
+  if (!profiles?.length) {
+    console.error("[stripe] No profile found for subscription:", subscription.id);
+    return;
+  }
+
+  const isActive = subscription.status === "active";
+  const periodEnd = getPeriodEnd(subscription);
+
+  await supabase
+    .from("profiles")
+    .update({
+      role: isActive ? "pro" : "free",
+      subscription_status: subscription.status,
+      current_period_end: periodEnd,
+    })
+    .eq("id", profiles[0].id);
 }
 
 export async function handleSubscriptionDeleted(
   subscription: Stripe.Subscription
 ) {
   const supabase = createSupabaseServiceClient();
+
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id")
@@ -49,6 +99,7 @@ export async function handleSubscriptionDeleted(
         role: "free",
         stripe_subscription_id: null,
         subscription_status: "canceled",
+        current_period_end: null,
       })
       .eq("id", profiles[0].id);
   }
@@ -57,8 +108,7 @@ export async function handleSubscriptionDeleted(
 export async function handleInvoicePaymentFailed(
   invoice: Stripe.Invoice
 ) {
-  const subscription =
-    invoice.parent?.subscription_details?.subscription;
+  const subscription = invoice.parent?.subscription_details?.subscription;
   const subscriptionId =
     typeof subscription === "string" ? subscription : subscription?.id;
   if (!subscriptionId) return;
@@ -66,7 +116,32 @@ export async function handleInvoicePaymentFailed(
   const supabase = createSupabaseServiceClient();
   await supabase
     .from("profiles")
-    .update({ subscription_status: "past_due" })
+    .update({
+      role: "free",
+      subscription_status: "past_due",
+    })
+    .eq("stripe_subscription_id", subscriptionId);
+}
+
+export async function handleInvoicePaymentSucceeded(
+  invoice: Stripe.Invoice
+) {
+  const subscription = invoice.parent?.subscription_details?.subscription;
+  const subscriptionId =
+    typeof subscription === "string" ? subscription : subscription?.id;
+  if (!subscriptionId) return;
+
+  const stripeSubscription = await getStripe().subscriptions.retrieve(subscriptionId);
+  const periodEnd = getPeriodEnd(stripeSubscription);
+
+  const supabase = createSupabaseServiceClient();
+  await supabase
+    .from("profiles")
+    .update({
+      role: "pro",
+      subscription_status: "active",
+      current_period_end: periodEnd,
+    })
     .eq("stripe_subscription_id", subscriptionId);
 }
 
@@ -74,7 +149,8 @@ export async function verifyWebhook(
   payload: string | Buffer,
   signature: string
 ): Promise<Stripe.Event> {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET!;
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) throw new Error("STRIPE_WEBHOOK_SECRET is not set");
   return getStripe().webhooks.constructEvent(
     payload,
     signature,
