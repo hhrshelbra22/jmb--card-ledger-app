@@ -69,21 +69,28 @@ export async function handleSubscriptionUpdated(
     return;
   }
 
-  const periodEnd = getPeriodEnd(subscription);
   const sub = subscription as any;
-  const isCanceledAtPeriodEnd = sub.cancel_at_period_end === true;
+  const periodEnd = getPeriodEnd(subscription);
+
+  // Stripe can signal cancellation in two ways:
+  // 1. cancel_at_period_end = true (older behavior)
+  // 2. cancel_at is set to a timestamp (newer billing portal behavior)
+  const isCanceling =
+    sub.cancel_at_period_end === true ||
+    (sub.cancel_at !== null && sub.cancel_at !== undefined);
 
   await supabase
     .from("profiles")
     .update({
-      role: "pro",                          // keep pro until deleted event fires
-      subscription_status: isCanceledAtPeriodEnd ? "canceled" : subscription.status,
+      role: "pro",                                          // keep pro until deleted fires
+      subscription_status: isCanceling ? "canceled" : subscription.status,
       current_period_end: periodEnd,
     })
     .eq("id", profiles[0].id);
 
-  console.log(`[stripe] Subscription updated | cancel_at_period_end: ${isCanceledAtPeriodEnd} | status: ${subscription.status}`);
+  console.log(`[stripe] Updated | status: ${subscription.status} | cancel_at: ${sub.cancel_at} | cancel_at_period_end: ${sub.cancel_at_period_end} | isCanceling: ${isCanceling}`);
 }
+
 
 export async function handleSubscriptionDeleted(
   subscription: Stripe.Subscription
