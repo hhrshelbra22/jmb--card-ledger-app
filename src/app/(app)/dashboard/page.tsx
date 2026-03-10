@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDashboardStats } from "@/lib/query/dashboard";
 import { useSales } from "@/lib/query/sales";
 import { KPICard } from "@/components/dashboard/KPICard";
@@ -15,8 +15,9 @@ import {
   Layers,
   AlertTriangle,
   FileDown,
+  X,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { Card } from "@/components/ui/card";
 import { formatCurrency, getGameColor, getGameDisplayName } from "@/lib/utils";
 import type { Sale } from "@/types";
@@ -29,6 +30,14 @@ export default function DashboardPage() {
   const topCards = [...recentSales]
     .sort((a, b) => b.realized_profit - a.realized_profit)
     .slice(0, 5);
+
+  // Disclaimer: show on mount, auto-dismiss after 5s, user can close early
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowDisclaimer(false), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-5 md:space-y-6">
@@ -45,26 +54,39 @@ export default function DashboardPage() {
         </p>
       </motion.div>
 
-      {/* ── Market Value Disclaimer ───────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.05 }}
-      >
-        <div className="flex items-start gap-2.5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
-          <AlertTriangle className="size-4 text-yellow-500 shrink-0 mt-0.5" />
-          <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-400 leading-relaxed">
-            <span className="font-semibold">Disclaimer:</span> Estimated
-            inventory value is based on your{" "}
-            <span className="font-medium">purchase cost basis</span>, not
-            current market prices. Actual market value may be higher or lower.
-            Do not rely on this figure for financial or tax decisions.
-          </p>
-        </div>
-      </motion.div>
+      {/* ── Market Value Disclaimer (auto-dismiss 5s + close button) ─────── */}
+      <AnimatePresence>
+        {showDisclaimer && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="flex items-start gap-2.5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
+              <AlertTriangle className="size-4 text-yellow-500 shrink-0 mt-0.5" />
+              <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-400 leading-relaxed flex-1">
+                <span className="font-semibold">Disclaimer:</span> Estimated
+                inventory value is based on your{" "}
+                <span className="font-medium">purchase cost basis</span>, not
+                current market prices. Actual market value may be higher or
+                lower. Do not rely on this figure for financial or tax
+                decisions.
+              </p>
+              <button
+                onClick={() => setShowDisclaimer(false)}
+                className="shrink-0 mt-0.5 text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-200 transition-colors"
+                aria-label="Dismiss disclaimer"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -128,17 +150,18 @@ export default function DashboardPage() {
           />
         </motion.div>
 
+        {/* Est. Inventory Value — spans full width on mobile, normal on xl */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.5 }}
           whileHover={{ y: -4, transition: { duration: 0.2 } }}
-          className="col-span-2 sm:col-span-2 lg:col-span-1"
+          className="col-span-2 lg:col-span-4 xl:col-span-1"
         >
           <KPICard
             title="Est. Inventory Value"
             value={stats?.inventory_estimated_value ?? 0}
-            subtitle="Based on cost basis · not market price"
+            subtitle="Cost basis · not market price"
             icon={Layers}
             isLoading={statsLoading}
             className="border-border rounded-xl border-yellow-500/20"

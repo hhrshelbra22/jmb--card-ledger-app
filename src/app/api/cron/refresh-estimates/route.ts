@@ -25,9 +25,8 @@ export async function POST(req: NextRequest) {
   // 2. Only fetch lots that:
   //    - have qty_on_hand > 0
   //    - have never been refreshed OR were last refreshed > 12h ago
-  const twelveHoursAgo = new Date(
-    Date.now() - 12 * 60 * 60 * 1000
-  ).toISOString();
+// ✅ 11 hours — ensures lots always get picked up at the next run
+const elevenHoursAgo = new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString();
 
   const { data: lots, error: lotsError } = await supabase
     .from("inventory_lots")
@@ -35,7 +34,7 @@ export async function POST(req: NextRequest) {
       "id, user_id, game, card_name, set_name, condition, variant, price_query_key"
     )
     .gt("qty_on_hand", 0)
-    .or(`last_estimate_at.is.null,last_estimate_at.lt.${twelveHoursAgo}`);
+    .or(`last_estimate_at.is.null,last_estimate_at.lt.${elevenHoursAgo}`);
 
   if (lotsError) {
     return NextResponse.json({ error: lotsError.message }, { status: 500 });

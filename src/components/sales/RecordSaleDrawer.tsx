@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import { Plus, Package, CalendarDays, Tag } from "lucide-react";
 import { useState } from "react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -43,17 +43,74 @@ interface RecordSaleDrawerProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordSaleDrawerProps) {
+/** Format "2026-03-06" → "Mar 6, 2026" */
+function formatDate(dateStr: string): string {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+type Lot = {
+  id: string;
+  card_name: string;
+  set_name: string;
+  game: string;
+  condition: string;
+  variant?: string;
+  purchase_date: string;
+  created_at: string;
+  cost_per_card: string | number;
+  qty_on_hand: number;
+};
+
+/** Returns 1-based lot number ordered by purchase_date ASC, created_at ASC */
+function getLotNumber(lots: Lot[], current: Lot): number {
+  return (
+    [...lots]
+      .filter(
+        (l) =>
+          l.card_name === current.card_name &&
+          l.set_name === current.set_name &&
+          l.game === current.game &&
+          l.condition === current.condition
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.purchase_date).getTime() - new Date(b.purchase_date).getTime() ||
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+      .findIndex((l) => l.id === current.id) + 1
+  );
+}
+
+function siblingsCount(lots: Lot[], current: Lot): number {
+  return lots.filter(
+    (l) =>
+      l.card_name === current.card_name &&
+      l.set_name === current.set_name &&
+      l.game === current.game &&
+      l.condition === current.condition
+  ).length;
+}
+
+export function RecordSaleDrawer({
+  open: controlledOpen,
+  onOpenChange,
+}: RecordSaleDrawerProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
 
   const recordSale = useRecordSale();
   const { data: inventoryData } = useInventoryLots({ page: 1, pageSize: 200 });
-  const lots = inventoryData?.data ?? [];
+  const lots: Lot[] = inventoryData?.data ?? [];
 
   const form = useForm<RecordSalePayload>({
-    resolver: zodResolver(RecordSaleSchema) as import("react-hook-form").Resolver<RecordSalePayload>,
+    resolver: zodResolver(
+      RecordSaleSchema
+    ) as import("react-hook-form").Resolver<RecordSalePayload>,
     defaultValues: {
       sale_date: new Date().toISOString().split("T")[0],
       platform: "",
@@ -81,8 +138,7 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
   const grossRevenue = qtySold * salePriceEach;
   const totalFees = platformFee + processingFee + shippingCost + otherFees;
   const netProceeds = grossRevenue - totalFees;
-  const estimatedCostBasis = 0;
-  const estimatedProfit = netProceeds - estimatedCostBasis;
+  const estimatedProfit = netProceeds;
 
   async function onSubmit(values: RecordSalePayload) {
     await recordSale.mutateAsync(values);
@@ -90,18 +146,25 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
     setOpen(false);
   }
 
-  const triggerButton = (
-    <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-      <Plus className="w-4 h-4 mr-2" />
-      Record Sale
-    </Button>
+  const currentLot = lots.find(
+    (l) =>
+      l.card_name === form.watch("card_name") &&
+      l.set_name === form.watch("set_name") &&
+      l.game === form.watch("game") &&
+      l.condition === form.watch("condition")
   );
 
   return (
     <Drawer open={open} onOpenChange={setOpen} direction="right">
-      {controlledOpen == null && <DrawerTrigger asChild>{triggerButton}</DrawerTrigger>}
+      {controlledOpen == null && (
+        <DrawerTrigger asChild>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Plus className="w-4 h-4 mr-2" />
+            Record Sale
+          </Button>
+        </DrawerTrigger>
+      )}
 
-      {/* Full-width on mobile, capped on sm+ */}
       <DrawerContent className="w-full sm:max-w-[520px] ml-auto flex flex-col h-full">
         <DrawerHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-5 shrink-0">
           <DrawerTitle className="text-base sm:text-lg">Record a Sale</DrawerTitle>
@@ -112,60 +175,141 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
           className="flex flex-col flex-1 min-h-0"
         >
           <Form {...form}>
-            {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-2 space-y-5 sm:space-y-6">
 
               {/* ── Card Identity ── */}
               <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm text-muted-foreground font-medium">Card Identity</h4>
+                <h4 className="text-xs sm:text-sm text-muted-foreground font-medium">
+                  Card Identity
+                </h4>
 
                 <FormField
                   control={form.control}
                   name="card_name"
-                  render={({ field }) => {
-                    const currentLot = lots.find(
-                      (l) =>
-                        l.card_name === field.value &&
-                        l.set_name === form.getValues("set_name") &&
-                        l.game === form.getValues("game") &&
-                        l.condition === form.getValues("condition")
-                    );
-                    return (
-                      <FormItem>
-                        <FormLabel className="text-xs sm:text-sm">Card</FormLabel>
-                        <Select
-                          value={currentLot?.id ?? ""}
-                          onValueChange={(id) => {
-                            const lot = lots.find((l) => l.id === id);
-                            if (lot) {
-                              form.setValue("card_name", lot.card_name);
-                              form.setValue("set_name", lot.set_name);
-                              form.setValue("game", lot.game);
-                              form.setValue("variant", lot.variant ?? "");
-                              form.setValue("condition", lot.condition);
-                            }
-                          }}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="bg-input-background h-8 sm:h-9 text-xs sm:text-sm">
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs sm:text-sm">Card</FormLabel>
+                      <Select
+                        value={currentLot?.id ?? ""}
+                       onValueChange={(id) => {
+                          const lot = lots.find((l) => l.id === id);
+                          if (lot) {
+                            form.setValue("card_name", lot.card_name);
+                            form.setValue("set_name", lot.set_name);
+                            form.setValue("game", lot.game as "pokemon" | "yugioh" | "riftbound");
+                            form.setValue("variant", lot.variant ?? "");
+                            form.setValue("condition", lot.condition as "NM" | "LP" | "MP" | "HP" | "DMG");
+                          }
+                        }}
+                      >
+                        <FormControl>
+                          {/* Trigger shows selected lot summary */}
+                          <SelectTrigger className="bg-input-background h-auto min-h-[40px] text-xs sm:text-sm py-2 px-3">
+                            {currentLot ? (
+                              <div className="flex items-center gap-2 text-left">
+                                <span className="font-medium truncate">
+                                  {currentLot.card_name}
+                                </span>
+                                {siblingsCount(lots, currentLot) > 1 && (
+                                  <span className="shrink-0 text-[10px] font-semibold bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">
+                                    Lot {getLotNumber(lots, currentLot)}
+                                  </span>
+                                )}
+                                <span className="shrink-0 text-[11px] text-muted-foreground ml-auto">
+                                  {currentLot.qty_on_hand} avail
+                                </span>
+                              </div>
+                            ) : (
                               <SelectValue placeholder="Select from inventory..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {lots.map((lot) => (
-                              <SelectItem key={lot.id} value={lot.id} className="text-xs sm:text-sm">
-                                {lot.card_name} ({lot.set_name}) — {lot.qty_on_hand} available
+                            )}
+                          </SelectTrigger>
+                        </FormControl>
+
+                        {/* Dropdown — full width of trigger, two-line rows */}
+                        <SelectContent
+                          className="w-[var(--radix-select-trigger-width)] p-1"
+                          position="popper"
+                          sideOffset={4}
+                        >
+                          {lots.length === 0 && (
+                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                              No inventory available
+                            </div>
+                          )}
+
+                          {lots.map((lot) => {
+                            const lotNum = getLotNumber(lots, lot);
+                            const isMulti = siblingsCount(lots, lot) > 1;
+
+                            return (
+                              <SelectItem
+                                key={lot.id}
+                                value={lot.id}
+                                // Remove default truncation so our layout controls width
+                                className="rounded-md py-2.5 px-2.5 cursor-pointer focus:bg-accent data-[state=checked]:bg-primary/10 [&>span:first-child]:hidden"
+                              >
+                                <div className="flex flex-col gap-1 w-full">
+
+                                  {/* ── Row 1: card name + lot badge + qty pill ── */}
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs sm:text-sm font-medium leading-snug flex-1">
+                                      {lot.card_name}
+                                    </span>
+                                    {isMulti && (
+                                      <span className="shrink-0 text-[10px] font-bold bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">
+                                        Lot {lotNum}
+                                      </span>
+                                    )}
+                                    <span
+                                      className={`shrink-0 text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
+                                        lot.qty_on_hand === 0
+                                          ? "bg-destructive/15 text-destructive"
+                                          : "bg-muted text-foreground"
+                                      }`}
+                                    >
+                                      {lot.qty_on_hand} avail
+                                    </span>
+                                  </div>
+
+                                  {/* ── Row 2: set · condition · date · cost ── */}
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                    <span className="text-[11px] text-muted-foreground truncate max-w-[120px]">
+                                      {lot.set_name}
+                                    </span>
+
+                                    <span className="text-[11px] text-muted-foreground/40">·</span>
+
+                                    <span className="text-[11px] font-medium text-muted-foreground">
+                                      {lot.condition}
+                                    </span>
+
+                                    <span className="text-[11px] text-muted-foreground/40">·</span>
+
+                                    <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
+                                      <CalendarDays className="size-3 shrink-0" />
+                                      {formatDate(lot.purchase_date)}
+                                    </span>
+
+                                    <span className="text-[11px] text-muted-foreground/40">·</span>
+
+                                    <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
+                                      <Tag className="size-3 shrink-0" />
+                                      {formatCurrency(Number(lot.cost_per_card))}/card
+                                    </span>
+                                  </div>
+
+                                </div>
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    );
-                  }}
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )}
                 />
 
-                {/* Hidden fields */}
+                {/* Hidden identity fields */}
                 {(["game", "set_name", "variant", "condition"] as const).map((name) => (
                   <FormField
                     key={name}
@@ -173,7 +317,9 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
                     name={name}
                     render={({ field }) => (
                       <FormItem className="sr-only">
-                        <FormControl><input type="hidden" {...field} /></FormControl>
+                        <FormControl>
+                          <input type="hidden" {...field} />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
@@ -191,7 +337,9 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
                           min={1}
                           className="bg-input-background h-8 sm:h-9 text-xs sm:text-sm"
                           {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                          onChange={(e) =>
+                            field.onChange(parseInt(e.target.value, 10) || 1)
+                          }
                         />
                       </FormControl>
                       <FormMessage className="text-xs" />
@@ -202,7 +350,9 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
 
               {/* ── Sale Details ── */}
               <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm text-muted-foreground font-medium">Sale Details</h4>
+                <h4 className="text-xs sm:text-sm text-muted-foreground font-medium">
+                  Sale Details
+                </h4>
 
                 <FormField
                   control={form.control}
@@ -233,7 +383,6 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
                   )}
                 />
 
-                {/* Sale date + price side by side on sm+ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <FormField
                     control={form.control}
@@ -242,7 +391,11 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
                       <FormItem>
                         <FormLabel className="text-xs sm:text-sm">Sale Date</FormLabel>
                         <FormControl>
-                          <Input type="date" className="bg-input-background h-8 sm:h-9 text-xs sm:text-sm" {...field} />
+                          <Input
+                            type="date"
+                            className="bg-input-background h-8 sm:h-9 text-xs sm:text-sm"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage className="text-xs" />
                       </FormItem>
@@ -261,7 +414,9 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
                             placeholder="0.00"
                             className="font-mono text-right bg-input-background h-8 sm:h-9 text-xs sm:text-sm"
                             {...field}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                            onChange={(e) =>
+                              field.onChange(parseFloat(e.target.value) || 0)
+                            }
                           />
                         </FormControl>
                         <FormMessage className="text-xs" />
@@ -273,7 +428,9 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
                 {grossRevenue > 0 && (
                   <div className="p-2.5 sm:p-3 bg-muted rounded-lg">
                     <p className="text-xs text-muted-foreground">Gross Revenue</p>
-                    <p className="text-base sm:text-lg font-mono">{formatCurrency(grossRevenue)}</p>
+                    <p className="text-base sm:text-lg font-mono">
+                      {formatCurrency(grossRevenue)}
+                    </p>
                   </div>
                 )}
               </div>
@@ -282,7 +439,6 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
               <div className="space-y-3 sm:space-y-4">
                 <h4 className="text-xs sm:text-sm text-muted-foreground font-medium">Fees</h4>
 
-                {/* 2-column fee grid on sm+ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   {(
                     [
@@ -306,7 +462,9 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
                               placeholder="0.00"
                               className="font-mono text-right bg-input-background h-8 sm:h-9 text-xs sm:text-sm"
                               {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              onChange={(e) =>
+                                field.onChange(parseFloat(e.target.value) || 0)
+                              }
                             />
                           </FormControl>
                           <FormMessage className="text-xs" />
@@ -331,16 +489,23 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
                 <div className="p-3 sm:p-4 border-2 border-primary/30 bg-primary/5 rounded-lg space-y-2">
                   <p className="text-xs sm:text-sm text-primary font-medium">FIFO Preview</p>
                   <p className="text-xs text-muted-foreground">
-                    Will consume {qtySold} card(s) from matching lots (FIFO). Cost basis calculated on record.
+                    Will consume {qtySold} card(s) from oldest lot first (FIFO).
+                    Cost basis calculated on record.
                   </p>
                   <div className="flex justify-between pt-2 border-t border-primary/20 gap-4">
                     <div>
                       <p className="text-xs text-muted-foreground">Net Proceeds</p>
-                      <p className="font-mono text-sm sm:text-base">{formatCurrency(netProceeds)}</p>
+                      <p className="font-mono text-sm sm:text-base">
+                        {formatCurrency(netProceeds)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Est. Profit</p>
-                      <p className={`font-mono text-sm sm:text-base ${estimatedProfit >= 0 ? "text-profit" : "text-loss"}`}>
+                      <p
+                        className={`font-mono text-sm sm:text-base ${
+                          estimatedProfit >= 0 ? "text-profit" : "text-loss"
+                        }`}
+                      >
                         {formatCurrency(estimatedProfit)}
                       </p>
                     </div>
@@ -349,7 +514,7 @@ export function RecordSaleDrawer({ open: controlledOpen, onOpenChange }: RecordS
               )}
             </div>
 
-            {/* Sticky footer */}
+            {/* ── Sticky footer ── */}
             <div className="flex gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-border shrink-0">
               <Button
                 type="button"

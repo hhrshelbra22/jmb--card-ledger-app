@@ -16,27 +16,30 @@ import {
   BarChart3,
   ImageUp,
   FileSpreadsheet,
+  RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
+// ── Free plan — icon + text only, no check or X (matches screenshot style) ──
 const FREE_FEATURES = [
-  { text: "Maximum 25 inventory lots", icon: Package },
-  { text: "Maximum 50 sales", icon: Receipt },
-  { text: "No market value estimates", icon: Zap },
-  { text: "No image uploads", icon: ImageUp },
-  { text: "No CSV export", icon: FileSpreadsheet },
+  { text: "Inventory & sales tracking", icon: Package },
+  { text: "FIFO profit calculation", icon: Receipt },
+  { text: "Dashboard metrics", icon: Zap },
+  { text: "Market value estimates", icon: ImageUp },
 ] as const;
 
+// ── Pro plan — spec-aligned, green check marks only ──────────────────────────
 const PRO_FEATURES = [
-  { text: "Unlimited inventory", icon: Package },
-  { text: "Unlimited sales", icon: Receipt },
-  { text: "Market estimation enabled", icon: Zap },
-  { text: "Image uploads enabled", icon: ImageUp },
-  { text: "Reports enabled", icon: BarChart3 },
+  
+  { text: "CSV Export – Purchases", icon: FileSpreadsheet },
+  { text: "CSV Export – Sales (with profit fields)", icon: FileSpreadsheet },
+  { text: "CSV Export – FIFO allocations", icon: BarChart3 },
+  { text: "Monthly summary export (Revenue / COGS / Fees / Profit)", icon: BarChart3 },
+  { text: "FIFO recalculation on data change", icon: RefreshCcw },
 ] as const;
 
 const PRICE_MONTHLY = 29;
-const PRICE_ANNUAL = 299;
+
 
 export default function PlanPage() {
   const { data: profile, isLoading: profileLoading } = useProfile();
@@ -140,7 +143,7 @@ export default function PlanPage() {
               <Button
                 variant="outline"
                 onClick={handleManageBilling}
-                className="gap-2"
+                className="gap-2 cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors"
               >
                 Manage billing
               </Button>
@@ -148,7 +151,7 @@ export default function PlanPage() {
               <Button
                 onClick={() => priceMonthlyId && handleCheckout(priceMonthlyId)}
                 disabled={!priceMonthlyId}
-                className="gap-2"
+                className="gap-2 cursor-pointer hover:opacity-90 transition-opacity"
               >
                 Upgrade to Pro
               </Button>
@@ -157,7 +160,7 @@ export default function PlanPage() {
         </Card>
       </motion.div>
 
-      {/* Upgrade message when free */}
+      {/* Upgrade nudge when free */}
       {!isPro && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -179,7 +182,8 @@ export default function PlanPage() {
       >
         <h2 className="text-lg font-semibold mb-4">Choose a plan</h2>
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Free plan */}
+
+          {/* ── Free plan ── */}
           <Card
             className={`p-6 rounded-xl border-2 flex flex-col ${
               !isPro ? "border-primary/50 bg-primary/5" : "border-border"
@@ -195,22 +199,32 @@ export default function PlanPage() {
             </div>
             <p className="text-2xl font-bold mb-1">$0</p>
             <p className="text-sm text-muted-foreground mb-4">Forever</p>
+
+            {/* Icon + text only — no check, no X */}
             <ul className="space-y-2 flex-1">
               {FREE_FEATURES.map(({ text, icon: Icon }) => (
-                <li key={text} className="flex items-center gap-2 text-sm text-muted-foreground">
+                <li
+                  key={text}
+                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                >
                   <Icon className="w-4 h-4 shrink-0 opacity-60" />
                   {text}
                 </li>
               ))}
             </ul>
+
             {!isPro && (
-              <Button variant="outline" className="mt-4 w-full" disabled>
+              <Button
+                variant="outline"
+                className="mt-4 w-full cursor-not-allowed opacity-60"
+                disabled
+              >
                 Current plan
               </Button>
             )}
           </Card>
 
-          {/* Pro plan */}
+          {/* ── Pro plan ── */}
           <Card
             className={`p-6 rounded-xl border-2 flex flex-col ${
               isPro ? "border-primary/50 bg-primary/5" : "border-border"
@@ -225,22 +239,23 @@ export default function PlanPage() {
               )}
             </div>
             <p className="text-2xl font-bold mb-1">${PRICE_MONTHLY}/mo</p>
-            <p className="text-sm text-muted-foreground mb-4">
-              or ${PRICE_ANNUAL}/year (save ~14%)
-            </p>
+  
+
+            {/* Green check marks on Pro only */}
             <ul className="space-y-2 flex-1">
-              {PRO_FEATURES.map(({ text, icon: Icon }) => (
+              {PRO_FEATURES.map(({ text }) => (
                 <li key={text} className="flex items-center gap-2 text-sm">
                   <Check className="w-4 h-4 shrink-0 text-primary" />
                   {text}
                 </li>
               ))}
             </ul>
+
             <div className="mt-4 space-y-2">
               {isPro ? (
                 <Button
                   variant="outline"
-                  className="w-full gap-2"
+                  className="w-full gap-2 cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors"
                   onClick={handleManageBilling}
                 >
                   Manage billing
@@ -249,30 +264,24 @@ export default function PlanPage() {
                 <>
                   {priceMonthlyId && (
                     <Button
-                      className="w-full gap-2"
+                      className="w-full gap-2 cursor-pointer hover:opacity-90 active:scale-[0.98] transition-all"
                       onClick={() => handleCheckout(priceMonthlyId)}
                     >
                       Subscribe monthly — ${PRICE_MONTHLY}/mo
                     </Button>
                   )}
-                  {priceAnnualId && (
-                    <Button
-                      variant="outline"
-                      className="w-full gap-2"
-                      onClick={() => handleCheckout(priceAnnualId)}
-                    >
-                      Subscribe annually — ${PRICE_ANNUAL}/yr
-                    </Button>
-                  )}
+                  
                   {!priceMonthlyId && !priceAnnualId && (
                     <p className="text-sm text-muted-foreground">
-                      Stripe price IDs not configured. Set NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY (and optionally NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL) in .env.local.
+                      Stripe price IDs not configured. Set NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY
+                      (and optionally NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL) in .env.local.
                     </p>
                   )}
                 </>
               )}
             </div>
           </Card>
+
         </div>
       </motion.div>
 
