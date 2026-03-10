@@ -12,6 +12,15 @@ export interface Profile {
   subscription_status: SubscriptionStatus | null;
   created_at: string;
   current_period_end: string | null;
+  // ── Personal info fields ──
+  full_name: string | null;
+  phone: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  country: string | null;
 }
 
 export interface InventoryLot {

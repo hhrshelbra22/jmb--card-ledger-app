@@ -12,6 +12,15 @@ function toProfile(row: Record<string, unknown>): Profile {
     subscription_status: (row.subscription_status as Profile["subscription_status"]) ?? null,
     current_period_end: (row.current_period_end as string) ?? null,
     created_at: row.created_at as string,
+    // ── New personal info fields ──
+    full_name: (row.full_name as string) ?? null,
+    phone: (row.phone as string) ?? null,
+    address_line1: (row.address_line1 as string) ?? null,
+    address_line2: (row.address_line2 as string) ?? null,
+    city: (row.city as string) ?? null,
+    state: (row.state as string) ?? null,
+    zip: (row.zip as string) ?? null,
+    country: (row.country as string) ?? null,
   };
 }
 
