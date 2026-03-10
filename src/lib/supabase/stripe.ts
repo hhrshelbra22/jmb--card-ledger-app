@@ -118,19 +118,33 @@ export async function handleSubscriptionDeleted(
 export async function handleInvoicePaymentFailed(
   invoice: Stripe.Invoice
 ) {
-  const subscription = invoice.parent?.subscription_details?.subscription;
+  const inv = invoice as any;
+  
+  // Your API version puts it here
   const subscriptionId =
-    typeof subscription === "string" ? subscription : subscription?.id;
-  if (!subscriptionId) return;
+    inv.parent?.subscription_details?.subscription ??  // plain string
+    inv.subscription ??                                 // fallback direct field
+    null;
+
+  console.log("[stripe] payment_failed subscriptionId:", subscriptionId);
+
+  if (!subscriptionId) {
+    console.error("[stripe] ❌ No subscriptionId found");
+    return;
+  }
 
   const supabase = createSupabaseServiceClient();
-  await supabase
+  const { error, data } = await supabase
     .from("profiles")
     .update({
       role: "free",
       subscription_status: "past_due",
     })
-    .eq("stripe_subscription_id", subscriptionId);
+    .eq("stripe_subscription_id", subscriptionId)
+    .select();
+
+  if (error) console.error("[stripe] ❌ DB update failed:", JSON.stringify(error));
+  else console.log("[stripe] ✅ Rows updated:", data?.length ?? 0);
 }
 
 export async function handleInvoicePaymentSucceeded(

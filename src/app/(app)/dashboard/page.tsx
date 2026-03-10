@@ -6,7 +6,16 @@ import { useSales } from "@/lib/query/sales";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ProfitChart } from "@/components/dashboard/ProfitChart";
 import { RecentSalesTable } from "@/components/dashboard/RecentSalesTable";
-import { TrendingUp, Package, DollarSign, Receipt } from "lucide-react";
+import { ExportButtons } from "@/components/ui/exports/exports";
+import {
+  TrendingUp,
+  Package,
+  DollarSign,
+  Receipt,
+  Layers,
+  AlertTriangle,
+  FileDown,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { Card } from "@/components/ui/card";
 import { formatCurrency, getGameColor, getGameDisplayName } from "@/lib/utils";
@@ -17,12 +26,14 @@ export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useDashboardStats(period);
   const { data: salesData } = useSales({ page: 1, pageSize: 10 });
   const recentSales = salesData?.data ?? [];
-  const topCards = [...recentSales].sort(
-    (a, b) => b.realized_profit - a.realized_profit
-  ).slice(0, 5);
+  const topCards = [...recentSales]
+    .sort((a, b) => b.realized_profit - a.realized_profit)
+    .slice(0, 5);
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-5 md:space-y-6">
+
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -34,7 +45,26 @@ export default function DashboardPage() {
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* ── Market Value Disclaimer ───────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+      >
+        <div className="flex items-start gap-2.5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
+          <AlertTriangle className="size-4 text-yellow-500 shrink-0 mt-0.5" />
+          <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-400 leading-relaxed">
+            <span className="font-semibold">Disclaimer:</span> Estimated
+            inventory value is based on your{" "}
+            <span className="font-medium">purchase cost basis</span>, not
+            current market prices. Actual market value may be higher or lower.
+            Do not rely on this figure for financial or tax decisions.
+          </p>
+        </div>
+      </motion.div>
+
+      {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -50,6 +80,7 @@ export default function DashboardPage() {
             className="border-border rounded-xl relative overflow-hidden glow-primary"
           />
         </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -64,6 +95,7 @@ export default function DashboardPage() {
             className="border-border rounded-xl glow-secondary"
           />
         </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -79,6 +111,7 @@ export default function DashboardPage() {
             className="border-border rounded-xl glow-accent"
           />
         </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -94,8 +127,26 @@ export default function DashboardPage() {
             className="border-border rounded-xl"
           />
         </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          whileHover={{ y: -4, transition: { duration: 0.2 } }}
+          className="col-span-2 sm:col-span-2 lg:col-span-1"
+        >
+          <KPICard
+            title="Est. Inventory Value"
+            value={stats?.inventory_estimated_value ?? 0}
+            subtitle="Based on cost basis · not market price"
+            icon={Layers}
+            isLoading={statsLoading}
+            className="border-border rounded-xl border-yellow-500/20"
+          />
+        </motion.div>
       </div>
 
+      {/* ── Charts + Tables ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
         <ProfitChart
           data={stats?.profit_by_period ?? []}
@@ -110,12 +161,12 @@ export default function DashboardPage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <RecentSalesTable
-            sales={recentSales}
-            isLoading={statsLoading}
-          />
+          <RecentSalesTable sales={recentSales} isLoading={statsLoading} />
+
           <Card className="p-4 sm:p-5 md:p-6 border-border rounded-xl">
-            <h3 className="mb-3 sm:mb-4 font-medium text-sm sm:text-base">Top Performing Cards</h3>
+            <h3 className="mb-3 sm:mb-4 font-medium text-sm sm:text-base">
+              Top Performing Cards
+            </h3>
             <div className="space-y-2 sm:space-y-3">
               {topCards.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No sales yet</p>
@@ -139,7 +190,9 @@ export default function DashboardPage() {
                       {index + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs sm:text-sm truncate">{sale.card_name}</p>
+                      <p className="text-xs sm:text-sm truncate">
+                        {sale.card_name}
+                      </p>
                       <p className="text-xs text-muted-foreground truncate">
                         {getGameDisplayName(sale.game)}
                       </p>
@@ -159,6 +212,25 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
       </div>
+
+      {/* ── Export Section ────────────────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.6 }}
+      >
+        <Card className="p-4 sm:p-5 md:p-6 border-border rounded-xl">
+          <div className="flex items-center gap-2 mb-4">
+            <FileDown className="size-4 text-primary" />
+            <h3 className="font-medium text-sm sm:text-base">Export Data</h3>
+            <span className="ml-auto text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              Pro
+            </span>
+          </div>
+          <ExportButtons />
+        </Card>
+      </motion.div>
+
     </div>
   );
 }
