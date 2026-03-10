@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 const PRICECHARTING_BASE = "https://www.pricecharting.com/api/product";
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseServiceClient();
 
   // 2. Fetch lots needing refresh:
   //    - qty_on_hand > 0
