@@ -22,33 +22,73 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createSupabaseServerClient();
 
-  // 2. Only fetch lots that:
-  //    - have qty_on_hand > 0
-  //    - have never been refreshed OR were last refreshed > 12h ago
-// ✅ 11 hours — ensures lots always get picked up at the next run
-const elevenHoursAgo = new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString();
+  // 2. Fetch lots needing refresh:
+  //    - qty_on_hand > 0
+  //    - never refreshed OR last refreshed > 11h ago
+  const elevenHoursAgo = new Date(
+    Date.now() - 11 * 60 * 60 * 1000
+  ).toISOString();
 
-  const { data: lots, error: lotsError } = await supabase
-    .from("inventory_lots")
-    .select(
-      "id, user_id, game, card_name, set_name, condition, variant, price_query_key"
-    )
-    .gt("qty_on_hand", 0)
-    .or(`last_estimate_at.is.null,last_estimate_at.lt.${elevenHoursAgo}`);
+  // Use two separate queries and merge — avoids .or() timestamp parsing issues
+  const [nullResult, staleResult] = await Promise.all([
+    // Lots never refreshed
+    supabase
+      .from("inventory_lots")
+      .select("id, user_id, game, card_name, set_name, condition, variant, price_query_key, last_estimate_at")
+      .gt("qty_on_hand", 0)
+      .is("last_estimate_at", null),
 
-  if (lotsError) {
-    return NextResponse.json({ error: lotsError.message }, { status: 500 });
+    // Lots refreshed more than 11h ago
+    supabase
+      .from("inventory_lots")
+      .select("id, user_id, game, card_name, set_name, condition, variant, price_query_key, last_estimate_at")
+      .gt("qty_on_hand", 0)
+      .lt("last_estimate_at", elevenHoursAgo),
+  ]);
+
+  if (nullResult.error) {
+    return NextResponse.json({ error: nullResult.error.message }, { status: 500 });
+  }
+  if (staleResult.error) {
+    return NextResponse.json({ error: staleResult.error.message }, { status: 500 });
   }
 
-  if (!lots || lots.length === 0) {
+  // Merge and deduplicate by id
+  const seen = new Set<string>();
+  const lots = [...(nullResult.data ?? []), ...(staleResult.data ?? [])].filter(
+    (lot) => {
+      if (seen.has(lot.id)) return false;
+      seen.add(lot.id);
+      return true;
+    }
+  );
+
+  // Debug info always returned
+  const debug = {
+    cutoff: elevenHoursAgo,
+    never_refreshed: nullResult.data?.length ?? 0,
+    stale: staleResult.data?.length ?? 0,
+    total_to_refresh: lots.length,
+    sample_lot: lots[0]
+      ? {
+          id: lots[0].id,
+          card_name: lots[0].card_name,
+          last_estimate_at: lots[0].last_estimate_at,
+        }
+      : null,
+  };
+
+  if (lots.length === 0) {
     return NextResponse.json({
       message: "No lots need refreshing",
       refreshed: 0,
+      debug,
     });
   }
 
   let refreshed = 0;
   let failed = 0;
+  const errors: string[] = [];
 
   // 3. Loop and refresh each lot
   for (const lot of lots) {
@@ -82,31 +122,33 @@ const elevenHoursAgo = new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString();
 
       const queryKey =
         lot.price_query_key ??
-        [
-          lot.game,
-          lot.card_name,
-          lot.set_name,
-          lot.condition,
-          lot.variant ?? "",
-        ]
+        [lot.game, lot.card_name, lot.set_name, lot.condition, lot.variant ?? ""]
           .map((s: string) => s.trim().toLowerCase())
           .filter(Boolean)
           .join("|");
 
       // Insert price estimate row
-      await supabase.from("price_estimates").insert({
-        inventory_lot_id: lot.id,
-        user_id: lot.user_id,
-        estimated_price,
-        source: "pricecharting",
-        source_url,
-        currency: "USD",
-        status,
-        fetched_at: new Date().toISOString(),
-      });
+      const { error: insertError } = await supabase
+        .from("price_estimates")
+        .insert({
+          inventory_lot_id: lot.id,
+          user_id: lot.user_id,
+          estimated_price,
+          source: "pricecharting",
+          source_url,
+          currency: "USD",
+          status,
+          fetched_at: new Date().toISOString(),
+        });
+
+      if (insertError) {
+        errors.push(`insert ${lot.id}: ${insertError.message}`);
+        failed++;
+        continue;
+      }
 
       // Update lot with latest price + query key
-      await supabase
+      const { error: updateError } = await supabase
         .from("inventory_lots")
         .update({
           last_estimate_price: estimated_price,
@@ -115,9 +157,16 @@ const elevenHoursAgo = new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString();
         })
         .eq("id", lot.id);
 
+      if (updateError) {
+        errors.push(`update ${lot.id}: ${updateError.message}`);
+        failed++;
+        continue;
+      }
+
       refreshed++;
-    } catch {
+    } catch (e) {
       failed++;
+      errors.push(`exception ${lot.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -126,5 +175,7 @@ const elevenHoursAgo = new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString();
     refreshed,
     failed,
     total: lots.length,
+    errors: errors.length > 0 ? errors : undefined,
+    debug,
   });
 }
