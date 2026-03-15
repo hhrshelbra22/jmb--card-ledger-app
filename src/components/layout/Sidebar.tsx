@@ -75,7 +75,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             className="font-semibold text-sidebar-foreground"
             onClick={onMobileClose}
           >
-            JMB Ledger
+            JMB Card Ledger
           </Link>
           <button
             onClick={onMobileClose}

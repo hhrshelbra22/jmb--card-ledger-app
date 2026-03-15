@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [{ price, quantity: 1 }],
+      allow_promotion_codes: true,
       success_url:
         successUrl ??
         `${process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin}/dashboard`,
